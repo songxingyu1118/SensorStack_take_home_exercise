@@ -70,27 +70,16 @@ public class SensorDataAnalyzer {
     }
 
     public static void main(String[] args) {
-        if (args.length == 0) {
-            System.out.println("Usage: java SensorDataAnalyzer <file.csv>");
-            return;
-        }
-
+        
         String fileName = args[0];
         Map<Key, Stats> data = new HashMap<>();
 
         try (BufferedReader reader = new BufferedReader(new FileReader(fileName))) {
             String header = reader.readLine(); // skip header
-            if (header == null) {
-                System.out.println("Empty file!");
-                return;
-            }
 
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] cols = line.split(",");
-
-                // skip bad lines
-                if (cols.length < 6) continue;
 
                 String site = cols[1].trim();
                 String device = cols[2].trim();
@@ -98,11 +87,7 @@ public class SensorDataAnalyzer {
                 String valueStr = cols[5].trim();
 
                 double value;
-                try {
-                    value = Double.parseDouble(valueStr);
-                } catch (NumberFormatException e) {
-                    continue; // skip non-number
-                }
+                value = Double.parseDouble(valueStr);
 
                 Key key = new Key(site, device, metric);
                 Stats stats = data.getOrDefault(key, new Stats());
