@@ -1,116 +1,156 @@
 import java.io.*;
 import java.util.*;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 
-/*
- * IoT Sensor Data Analyzer
- *
- * Reads a large CSV file of sensor data,
- * calculates average, min, max, count, stdDev
- * for each combination of (site + device + metric),
- * and prints the top 10 groups by average and variability.
- */
+import java.util.List;
+
+class SensorStats {
+    String site;
+    String device;
+    String metric;
+    double sum = 0;
+    double min = Double.MAX_VALUE;
+    double max = Double.MIN_VALUE;
+    double sumSq = 0;
+    int count = 0;
+
+    SensorStats(String site, String device, String metric) {
+        this.site = site;
+        this.device = device;
+        this.metric = metric;
+    }
+
+    void addValue(double value) {
+        sum += value;
+        sumSq += value * value;
+        if (value < min) min = value;
+        if (value > max) max = value;
+        count++;
+    }
+
+    double getAverage() {
+        return sum / count;
+    }
+
+    double getStdDev() {
+        double mean = getAverage();
+        return Math.sqrt((sumSq / count) - (mean * mean));
+    }
+
+    String getKey() {
+        return site + "-" + device + "-" + metric;
+    }
+}
+
+class SimpleChart {
+    public static void saveBarChart(List<SensorStats> statsList, String fileName) {
+        int width = 800;
+        int height = 400;
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+
+        // white background
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+
+        g.setColor(Color.BLUE);
+        g.setFont(new Font("Arial", Font.PLAIN, 12));
+
+        int topN = Math.min(10, statsList.size());
+        double maxAvg = statsList.get(0).getAverage();  // top average value
+        int barWidth = width / (topN * 2);
+        int x = barWidth;
+
+        for (int i = 0; i < topN; i++) {
+            SensorStats s = statsList.get(i);
+            int barHeight = (int) ((s.getAverage() / maxAvg) * (height - 100));
+            int y = height - barHeight - 40;
+
+            // draw bar
+            g.fillRect(x, y, barWidth, barHeight);
+            g.drawString(String.format("%.1f", s.getAverage()), x, y - 5);
+            g.drawString(s.device, x, height - 20);
+
+            x += barWidth * 2;
+        }
+
+        g.dispose();
+
+        try {
+            ImageIO.write(image, "png", new File(fileName));
+            System.out.println("Chart saved as " + fileName);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
 
 public class SensorDataAnalyzer {
-
-    // Represents one (site, device, metric) combination
-    static class Key {
-        String site, device, metric;
-
-        Key(String site, String device, String metric) {
-            this.site = site;
-            this.device = device;
-            this.metric = metric;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (!(o instanceof Key)) return false;
-            Key k = (Key) o;
-            return site.equals(k.site) && device.equals(k.device) && metric.equals(k.metric);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(site, device, metric);
-        }
-
-        @Override
-        public String toString() {
-            return site + " | " + device + " | " + metric;
-        }
-    }
-
-    /** Stores running stats using a stable method (Welford's algorithm) */
-    static class Stats {
-        long count = 0;
-        double mean = 0;
-        double m2 = 0;
-        double min = Double.POSITIVE_INFINITY;
-        double max = Double.NEGATIVE_INFINITY;
-
-        void add(double x) {
-            count++;
-            if (x < min) min = x;
-            if (x > max) max = x;
-
-            // Welford’s online algorithm
-            double delta = x - mean;
-            mean += delta / count;
-            m2 += delta * (x - mean);
-        }
-
-        double getAverage() { return mean; }
-        double getStdDev() { return count > 1 ? Math.sqrt(m2 / (count - 1)) : 0; }
-
-        @Override
-        public String toString() {
-            return String.format("count=%d avg=%.2f min=%.2f max=%.2f stddev=%.2f",
-                    count, mean, min, max, getStdDev());
-        }
-    }
-
     public static void main(String[] args) {
-        
-        String fileName = args[0];
-        Map<Key, Stats> data = new HashMap<>();
-
-        try (BufferedReader reader = new BufferedReader(new FileReader(fileName))) {
-            String header = reader.readLine(); // skip header
-
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] cols = line.split(",");
-
-                String site = cols[1].trim();
-                String device = cols[2].trim();
-                String metric = cols[3].trim();
-                String valueStr = cols[5].trim();
-
-                double value;
-                value = Double.parseDouble(valueStr);
-
-                Key key = new Key(site, device, metric);
-                Stats stats = data.getOrDefault(key, new Stats());
-                stats.add(value);
-                data.put(key, stats);
-            }
-        } catch (IOException e) {
-            System.out.println("Error reading file: " + e.getMessage());
+        if (args.length < 1) {
+            System.out.println("Usage: java SensorDataAnalyzer <csv-file>");
             return;
         }
 
-        // Sort and print top 10 by average
-        System.out.println("\nTop 10 by Highest Average:");
-        data.entrySet().stream()
-                .sorted((a, b) -> Double.compare(b.getValue().getAverage(), a.getValue().getAverage()))
-                .limit(10)
-                .forEach(e -> System.out.println(e.getKey() + " -> " + e.getValue()));
+        String fileName = args[0];
+        List<SensorStats> statsList = new ArrayList<>();
 
-        // Sort and print top 10 by stddev
-        System.out.println("\nTop 10 by Highest Variability (Std Dev):");
-        data.entrySet().stream()
-                .sorted((a, b) -> Double.compare(b.getValue().getStdDev(), a.getValue().getStdDev()))
-                .limit(10)
-                .forEach(e -> System.out.println(e.getKey() + " -> " + e.getValue()));
+        try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
+            String line = br.readLine(); // skip header
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length < 6) continue;
+
+                String time = parts[0];
+                String site = parts[1];
+                String device = parts[2];
+                String metric = parts[3];
+                String unit = parts[4];
+                double value = Double.parseDouble(parts[5]);
+
+                // find if this combination exists
+                SensorStats found = null;
+                for (SensorStats s : statsList) {
+                    if (s.site.equals(site) && s.device.equals(device) && s.metric.equals(metric)) {
+                        found = s;
+                        break;
+                    }
+                }
+
+                if (found == null) {
+                    found = new SensorStats(site, device, metric);
+                    statsList.add(found);
+                }
+
+                found.addValue(value);
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // sort by average
+        statsList.sort((a, b) -> Double.compare(b.getAverage(), a.getAverage()));
+        System.out.println("Top 10 by Highest Average:");
+        for (int i = 0; i < Math.min(10, statsList.size()); i++) {
+            SensorStats s = statsList.get(i);
+            System.out.printf("%s | avg=%.2f | min=%.2f | max=%.2f | count=%d | std=%.2f%n",
+                    s.getKey(), s.getAverage(), s.min, s.max, s.count, s.getStdDev());
+        }
+
+        // sort by std deviation
+        statsList.sort((a, b) -> Double.compare(b.getStdDev(), a.getStdDev()));
+        System.out.println("\nTop 10 by Highest Std Dev:");
+        for (int i = 0; i < Math.min(10, statsList.size()); i++) {
+            SensorStats s = statsList.get(i);
+            System.out.printf("%s | avg=%.2f | min=%.2f | max=%.2f | count=%d | std=%.2f%n",
+                    s.getKey(), s.getAverage(), s.min, s.max, s.count, s.getStdDev());
+        }
+
+        SimpleChart.saveBarChart(statsList, "chart.png");
+
     }
 }
