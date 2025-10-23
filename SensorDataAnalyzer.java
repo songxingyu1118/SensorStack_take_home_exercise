@@ -51,7 +51,6 @@ class SimpleChart {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
 
-        // white background
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, width, height);
 
@@ -68,7 +67,6 @@ class SimpleChart {
             int barHeight = (int) ((s.getAverage() / maxAvg) * (height - 100));
             int y = height - barHeight - 40;
 
-            // draw bar
             g.fillRect(x, y, barWidth, barHeight);
             g.drawString(String.format("%.1f", s.getAverage()), x, y - 5);
             g.drawString(s.device, x, height - 20);

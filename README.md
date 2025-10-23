@@ -26,5 +26,5 @@ Statistics: avg, min, max, std dev
 Bar chart saved as chart.png in the folder
 
 ## Notes
-Reads the file line by line, Keeps record for each site + device + metric combination (non-numeric values in the “value” column are skipped).
+Buffer reads the file line by line, Keeps record for each site + device + metric combination (non-numeric values in the “value” column are skipped).
 
